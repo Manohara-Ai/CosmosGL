@@ -17,18 +17,26 @@ Ensure you have the following libraries installed and linked:
 ---
 
 ## Build & Run
+Follow these steps to set up and launch the simulation on your local machine.
+1. **Clone the Repository**
+   Open your terminal and clone the repo to your local environment:
+   ```bash
+   git clone https://github.com/Manohara-Ai/CosmosGL.git
+   cd CosmosGL
+   ```
 
-1. **Verify Shader Paths**
+
+2. **Verify Shader Paths**
 
    Ensure the `resources/shaders/` directory contains the required `.vert` and `.frag` files.
 
-2. **Compile the source**
+3. **Compile the source**
 
    ```bash
-   g++ src/solarSystem.cpp -lglad -ldl -lGL -lglfw -o build/solarSystem
+   g++ src/solarSystem.cpp src/engine.cpp -lglad -ldl -lGL -lglfw -Iinclude -o build/solarSystem
    ```
 
-3. **Execute**
+4. **Execute**
 
    ```bash
    ./build/solarSystem
@@ -72,8 +80,6 @@ chmod +x run.bash
 ### Planned Extensions
 
 - **Black Hole Physics**
-
-- **Modular Engine Architecture**
 
 - **Rendering Enhancements**
 
