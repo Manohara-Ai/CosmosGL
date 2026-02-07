@@ -1,4 +1,4 @@
-#include "engine.h"
+#include "rasterEngine.h"
 
 Star::Star(vec3 pos, double m, double r, vec3 c, double b, vec3 v) 
     : position(pos), mass(m), radius(r), color(c), brightness(b), initialVelocity(v) {

@@ -9,8 +9,8 @@
  * * note Physics calculations use a gravitational constant G = 6.67430e-11 and support time scaling.
  */
 
-#ifndef ENGINE_H
-#define ENGINE_H
+#ifndef RASTER_ENGINE_H
+#define RASTER_ENGINE_H
 
 #include <iostream>
 #include <vector>
