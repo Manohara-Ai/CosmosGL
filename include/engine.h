@@ -36,6 +36,12 @@
 using namespace std;
 using namespace glm;
 
+struct CameraTarget {
+    vec3* position;
+    double radius;
+    string name;
+};
+
 struct Star {
     vec3 position;
     double mass;
@@ -50,6 +56,21 @@ struct Star {
     Star(vec3 pos, double m, double r, vec3 c, double b, vec3 v);
 };
 
+struct Satellite {
+    vec3 position;
+    double mass;
+    double radius;
+    vec3 color;
+    vec3 initialOrbitalVelocity;
+    double rotationAngle;
+    double rotationSpeed;
+    vector<GLfloat> vertices;
+    vector<GLuint> indices;
+    GLuint VAO, VBO, EBO;
+
+    Satellite(vec3 pos, double m, double r, vec3 c, double rS, vec3 v);
+};
+
 struct Planet {
     vec3 position;
     double mass;
@@ -58,6 +79,7 @@ struct Planet {
     double rotationAngle;
     double rotationSpeed;
     vec3 initialVelocity;
+    vector<Satellite> satellites;
     vector<GLfloat> vertices;
     vector<GLuint> indices;
     GLuint VAO, VBO, EBO;
@@ -79,14 +101,13 @@ private:
     int HEIGHT = 600;
 
     vec3 cameraPos = vec3(0.0f, 0.0f, 2.0e7f);
-    vec3 focusTarget = vec3(5.0f);
     mat4 projection;
     mat4 view;
 
     string getFileContents(const char* filename);
     GLuint createShader(const char* vertexFile, const char* fragmentFile);
 
-    GLuint uboWindowData, starShaderID, planetShaderID;
+    GLuint uboWindowData, starShaderID, planetShaderID, satelliteShaderID;
 
     vector<unique_ptr<Star>> stars;
     vector<unique_ptr<Planet>> planets;
@@ -103,15 +124,23 @@ public:
     float currentFrame = 0.0f;
     float deltaTime = 0.0f;
     float timeScale = 86400.0f;
+    float scaleFactor = 1.0f;
+    vec3 focusTarget = vec3(5.0f);
+    vector<CameraTarget> registry;
+    int focusIndex = 0;
 
     GLFWwindow* window;
 
     Engine();
-    ~Engine();
+    ~Engine();  
+
+    void cycleFocus();
+    void updateCameraFocus();
 
     void updateMatrices();
-    void addStar(unique_ptr<Star> st);
-    void addPlanet(float distance, double mass, double radius, vec3 color, double rotSpeed, float orbVel, float incRad);
+    Star* addStar(unique_ptr<Star> st);
+    Planet* addPlanet(float distance, double mass, double radius, vec3 color, double rotSpeed, float orbVel, float incRad);
+    Satellite* addSatellite(Planet* parent, float distFromPlanet, double mass, double radius, vec3 color, double rotSpeed, float orbitalVel);
     void setSimulation();
     void drawStar(Star& st);
     void drawPlanet(Planet& pt);

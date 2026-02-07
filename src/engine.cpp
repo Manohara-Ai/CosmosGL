@@ -44,11 +44,55 @@ Star::Star(vec3 pos, double m, double r, vec3 c, double b, vec3 v)
     glEnableVertexAttribArray(0);
 }
 
+Satellite::Satellite(vec3 pos, double m, double r, vec3 c, double rS, vec3 v) 
+    : position(pos), mass(m), radius(r), color(c), rotationSpeed(rS), initialOrbitalVelocity(v) {
+    
+    int stacks = 50, slices = 50;
+
+    for (int i = 0; i <= stacks; ++i) {
+        float phi = M_PI * i / stacks;
+        for (int j = 0; j <= slices; ++j) {
+            float theta = 2.0f * M_PI * j / slices;
+            float x = (float)radius * sin(phi) * cos(theta);
+            float y = (float)radius * cos(phi);
+            float z = (float)radius * sin(phi) * sin(theta);
+            vertices.push_back(x); vertices.push_back(y); vertices.push_back(z);
+        }
+    }
+
+    for (int i = 0; i < stacks; ++i) {
+        for (int j = 0; j < slices; ++j) {
+            unsigned int first = (i * (slices + 1)) + j;
+            unsigned int second = first + slices + 1;
+            indices.push_back(first);
+            indices.push_back(second);
+            indices.push_back(first + 1);
+            indices.push_back(second);
+            indices.push_back(second + 1);
+            indices.push_back(first + 1);
+        }
+    }
+
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+}
+
 Planet::Planet(vec3 pos, double m, double r, vec3 c, double rS, vec3 v) 
     : position(pos), mass(m), radius(r), color(c), rotationSpeed(rS), initialVelocity(v) {
     
     rotationAngle = 0.0;
-    int stacks = 40, slices = 40;
+    int stacks = 50, slices = 50;
 
     for (int i = 0; i <= stacks; ++i) {
         float phi = M_PI * i / stacks;
@@ -134,6 +178,7 @@ Engine::Engine() {
 
     this->starShaderID = createShader("resources/shaders/star.vert", "resources/shaders/star.frag");
     this->planetShaderID = createShader("resources/shaders/planet.vert", "resources/shaders/planet.frag");
+    this->satelliteShaderID = createShader("resources/shaders/satellite.vert", "resources/shaders/satellite.frag");
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -200,9 +245,21 @@ GLuint Engine::createShader(const char* vertexFile, const char* fragmentFile) {
     return ID;
 }
 
+void Engine::cycleFocus() {
+    if (registry.empty()) return;
+    focusIndex = (focusIndex + 1) % registry.size();
+    
+    this->distance = (float)registry[focusIndex].radius * 4.0f;
+}
+
+void Engine::updateCameraFocus() {
+    if (registry.empty()) return;
+    this->focusTarget = *registry[focusIndex].position;
+}
+
 void Engine::updateMatrices() {
     float aspect = (float)WIDTH / (float)HEIGHT;
-    mat4 proj = perspective(radians(45.0f), aspect, 1.0e6f, 1.0e16f);
+    mat4 proj = perspective(radians(45.0f), aspect, 1.e6f, 1.0e21f);
 
     vec3 offset(
         distance * cos(radians(pitch)) * cos(radians(yaw)),
@@ -218,18 +275,43 @@ void Engine::updateMatrices() {
     glBufferSubData(GL_UNIFORM_BUFFER, sizeof(mat4), sizeof(mat4), value_ptr(view));
 }
 
-void Engine::addStar(unique_ptr<Star> st) {
+Star* Engine::addStar(unique_ptr<Star> st) {
     stars.push_back(move(st));
+    Star* starPtr = stars.back().get();
+    registry.push_back({&starPtr->position, starPtr->radius, "Star"});
+    return starPtr;
 }
 
-void Engine::addPlanet(float distance, double mass, double radius, vec3 color, double rotSpeed, float orbVel, float incRad) {
+Planet* Engine::addPlanet(float distance, double mass, double radius, vec3 color, double rotSpeed, float orbVel, float incRad) {
     vec3 pos = vec3(
         (float)distance * cos(incRad), 
         (float)distance * sin(incRad), 
         0.0f
     );
+
     vec3 vel = vec3(0.0f, 0.0f, (float)orbVel);
-    planets.push_back(make_unique<Planet>(pos, mass, radius, color, rotSpeed, vel));
+
+    auto newPlanet = make_unique<Planet>(pos, mass, radius, color, rotSpeed, vel);
+    Planet* planetPtr = newPlanet.get();
+    planets.push_back(move(newPlanet));
+    registry.push_back({&planetPtr->position, planetPtr->radius, "Planet"});
+    return planetPtr;
+}
+
+Satellite* Engine::addSatellite(Planet* parent, float distFromPlanet, double mass, double radius, vec3 color, double rotSpeed, float orbitalVel) {
+    if (!parent) return nullptr;
+
+    vec3 relativePos = vec3(distFromPlanet, 0.0f, 0.0f);
+    vec3 absolutePos = parent->position + relativePos;
+    vec3 pureOrbitalVel = vec3(0.0f, 0.0f, orbitalVel);
+    
+    parent->satellites.emplace_back(absolutePos, mass, radius, color, rotSpeed, pureOrbitalVel);
+    
+    Satellite* satPtr = &parent->satellites.back();
+    
+    registry.push_back({&satPtr->position, satPtr->radius, "Moon"});
+    
+    return satPtr;
 }
 
 void Engine::setSimulation() {
@@ -243,8 +325,11 @@ void Engine::setSimulation() {
 }
 
 void Engine::drawStar(Star& st) {
+    glUseProgram(this->starShaderID);
     mat4 model = mat4(1.0f);
     model = translate(model, st.position);
+    model = scale(model, vec3(scaleFactor));
+
     glUniformMatrix4fv(glGetUniformLocation(starShaderID, "model"), 1, GL_FALSE, value_ptr(model));
     glUniform3fv(glGetUniformLocation(starShaderID, "viewPos"), 1, value_ptr(cameraPos));
     glUniform3fv(glGetUniformLocation(starShaderID, "starColor"), 1, value_ptr(st.color));
@@ -256,10 +341,12 @@ void Engine::drawStar(Star& st) {
 }
 
 void Engine::drawPlanet(Planet& pt) {
+    glUseProgram(this->planetShaderID);
     pt.rotationAngle += pt.rotationSpeed * (double)deltaTime;
     mat4 model = mat4(1.0f);
     model = translate(model, pt.position);
     model = rotate(model, (float)pt.rotationAngle, vec3(0.0f, 1.0f, 0.0f));
+    model = scale(model, vec3(scaleFactor));
 
     glUniformMatrix4fv(glGetUniformLocation(planetShaderID, "model"), 1, GL_FALSE, value_ptr(model));
     glUniform3fv(glGetUniformLocation(planetShaderID, "sunPos"), 1, value_ptr(stars[0]->position));
@@ -267,6 +354,22 @@ void Engine::drawPlanet(Planet& pt) {
 
     glBindVertexArray(pt.VAO);
     glDrawElements(GL_TRIANGLES, (GLsizei)pt.indices.size(), GL_UNSIGNED_INT, 0);
+
+    glUseProgram(this->satelliteShaderID);
+    for (auto& sat : pt.satellites) {
+        sat.rotationAngle += sat.rotationSpeed * (double)deltaTime;
+        mat4 satModel = mat4(1.0f);
+        satModel = translate(satModel, sat.position);
+        model = rotate(model, (float)sat.rotationAngle, vec3(0.0f, 1.0f, 0.0f));
+        satModel = scale(satModel, vec3(scaleFactor));
+
+        glUniformMatrix4fv(glGetUniformLocation(satelliteShaderID, "model"), 1, GL_FALSE, value_ptr(satModel));
+        glUniform3fv(glGetUniformLocation(satelliteShaderID, "sunPos"), 1, value_ptr(stars[0]->position));
+        glUniform3fv(glGetUniformLocation(satelliteShaderID, "satelliteColor"), 1, value_ptr(sat.color));
+
+        glBindVertexArray(sat.VAO);
+        glDrawElements(GL_TRIANGLES, (GLsizei)sat.indices.size(), GL_UNSIGNED_INT, 0);
+    }
     glBindVertexArray(0);
 }
 
@@ -283,6 +386,31 @@ void Engine::step() {
         }
         bodies[i].velocity += acceleration * (float)deltaTime;
     }
+
+    for (auto& p : planets) {
+        vec3 planetVelocity = vec3(0.0f);
+        for (auto& b : bodies) {
+            if (b.position == &p->position) {
+                planetVelocity = b.velocity;
+                break;
+            }
+        }
+
+        for (auto& sat : p->satellites) {
+            vec3 direction = p->position - sat.position;
+            float dist = length(direction);
+            
+            if (dist > 1e3f) { 
+                float forceMag = (float)((G * p->mass) / (dist * dist));
+                vec3 acceleration = normalize(direction) * forceMag;
+                
+                sat.initialOrbitalVelocity += acceleration * (float)deltaTime;
+            }
+            
+            sat.position += (sat.initialOrbitalVelocity + planetVelocity) * (float)deltaTime;
+        }
+    }
+
     for (auto& body : bodies) {
         *body.position += body.velocity * (float)deltaTime;
     }
@@ -297,16 +425,18 @@ bool Engine::run() {
     deltaTime = (currentFrame - lastFrame) * timeScale;
     lastFrame = currentFrame;
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    updateMatrices();
     step();
 
-    glUseProgram(this->starShaderID);
+    updateCameraFocus();
+
+    updateMatrices();
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     for (const auto& st : this->stars) {
         this->drawStar(*st);
     }
 
-    glUseProgram(this->planetShaderID);
     for (const auto& pt : this->planets) {
         this->drawPlanet(*pt);
     }
@@ -366,6 +496,12 @@ Engine::~Engine() {
         glDeleteVertexArrays(1, &planet->VAO);
         glDeleteBuffers(1, &planet->VBO);
         glDeleteBuffers(1, &planet->EBO);
+
+        for (auto& sat : planet->satellites) {
+            glDeleteVertexArrays(1, &sat.VAO);
+            glDeleteBuffers(1, &sat.VBO);
+            glDeleteBuffers(1, &sat.EBO);
+        }
     }
 
     glDeleteBuffers(1, &uboWindowData);
