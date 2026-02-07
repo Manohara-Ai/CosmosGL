@@ -213,6 +213,7 @@ Engine::Engine() {
     glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(mat4), NULL, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uboWindowData);
 
+    this->trailShaderID = createShader("resources/shaders/trail.vert", "resources/shaders/trail.frag");
     this->starShaderID = createShader("resources/shaders/star.vert", "resources/shaders/star.frag");
     this->planetShaderID = createShader("resources/shaders/planet.vert", "resources/shaders/planet.frag");
     this->ringShaderID = createShader("resources/shaders/ring.vert", "resources/shaders/ring.frag");
@@ -368,6 +369,34 @@ void Engine::setSimulation() {
     }
 }
 
+void Engine::drawTrail(const deque<vec3>& points, vec3 color) {
+    if (points.size() < 2) return;
+
+    glUseProgram(this->trailShaderID);
+    
+    GLuint vao, vbo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    
+    vector<vec3> tempPoints(points.begin(), points.end());
+    glBufferData(GL_ARRAY_BUFFER, tempPoints.size() * sizeof(vec3), tempPoints.data(), GL_STREAM_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)tempPoints.size());
+
+    glDisable(GL_BLEND);
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+}
+
 void Engine::drawStar(Star& st) {
     glUseProgram(this->starShaderID);
     mat4 model = mat4(1.0f);
@@ -446,12 +475,27 @@ void Engine::step() {
         bodies[i].velocity += acceleration * (float)deltaTime;
     }
 
+    static float lastTrailRecordTime = 0.0f;
+    float recordInterval = 0.05f;
+    bool shouldRecord = (currentFrame - lastTrailRecordTime >= recordInterval);
+
     for (auto& p : planets) {
         vec3 planetVelocity = vec3(0.0f);
         for (auto& b : bodies) {
             if (b.position == &p->position) {
                 planetVelocity = b.velocity;
                 break;
+            }
+        }
+
+        if (shouldRecord) {
+            p->trail.points.push_back(p->position);
+            float r = length(p->position - stars[0]->position);
+            float v = length(planetVelocity);
+            if (v > 0) {
+                float period = (2.0f * M_PI * r) / v;
+                size_t maxPoints = (size_t)(period / recordInterval);
+                while (p->trail.points.size() > maxPoints) p->trail.points.pop_front();
             }
         }
 
@@ -462,12 +506,28 @@ void Engine::step() {
             if (dist > 1e3f) { 
                 float forceMag = (float)((G * p->mass) / (dist * dist));
                 vec3 acceleration = normalize(direction) * forceMag;
-                
                 sat.initialOrbitalVelocity += acceleration * (float)deltaTime;
             }
-            
             sat.position += (sat.initialOrbitalVelocity + planetVelocity) * (float)deltaTime;
+
+            if (shouldRecord) {
+                sat.trail.points.push_back(sat.position);
+                float vRel = length(sat.initialOrbitalVelocity);
+                if (vRel > 0) {
+                    float period = (2.0f * M_PI * dist) / vRel;
+                    size_t maxPoints = (size_t)(period / recordInterval);
+                    while (sat.trail.points.size() > maxPoints) sat.trail.points.pop_front();
+                }
+            }
         }
+    }
+
+    if (shouldRecord) {
+        for (auto& s : stars) {
+            s->trail.points.push_back(s->position);
+            if (s->trail.points.size() > 2000) s->trail.points.pop_front();
+        }
+        lastTrailRecordTime = currentFrame;
     }
 
     for (auto& body : bodies) {
@@ -493,16 +553,22 @@ bool Engine::run() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     for (const auto& st : this->stars) {
+        this->drawTrail(st->trail.points, st->color);
         this->drawStar(*st);
     }
 
     for (const auto& pt : this->planets) {
+        this->drawTrail(pt->trail.points, pt->color);
+        
+        for (const auto& sat : pt->satellites) {
+            this->drawTrail(sat.trail.points, sat.color);
+        }
+        
         this->drawPlanet(*pt);
     }
 
     glfwSwapBuffers(window);
     glfwPollEvents();
-
     return true;
 }
 

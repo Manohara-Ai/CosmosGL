@@ -18,6 +18,7 @@
 #include <cerrno> 
 #include <string> 
 #include <fstream> 
+#include <deque>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -42,6 +43,10 @@ struct CameraTarget {
     string name;
 };
 
+struct Trail {
+    deque<vec3> points;
+};
+
 struct Star {
     vec3 position;
     double mass;
@@ -49,6 +54,7 @@ struct Star {
     vec3 color;
     double brightness;
     vec3 initialVelocity;
+    Trail trail;
     vector<GLfloat> vertices;
     vector<GLuint> indices;
     GLuint VAO, VBO, EBO;
@@ -64,6 +70,7 @@ struct Satellite {
     vec3 initialOrbitalVelocity;
     double rotationAngle;
     double rotationSpeed;
+    Trail trail;
     vector<GLfloat> vertices;
     vector<GLuint> indices;
     GLuint VAO, VBO, EBO;
@@ -91,6 +98,7 @@ struct Planet {
     double rotationAngle;
     double rotationSpeed;
     vec3 initialVelocity;
+    Trail trail;
     vector<Ring> rings;
     vector<Satellite> satellites;
     vector<GLfloat> vertices;
@@ -120,7 +128,7 @@ private:
     string getFileContents(const char* filename);
     GLuint createShader(const char* vertexFile, const char* fragmentFile);
 
-    GLuint uboWindowData, starShaderID, planetShaderID, ringShaderID, satelliteShaderID;
+    GLuint uboWindowData, trailShaderID, starShaderID, planetShaderID, ringShaderID, satelliteShaderID;
 
     vector<unique_ptr<Star>> stars;
     vector<unique_ptr<Planet>> planets;
@@ -156,6 +164,7 @@ public:
     void addRing(Planet* parent, double distFromPlanet, double thickness, double inclination, vec3 color);
     Satellite* addSatellite(Planet* parent, float distFromPlanet, double mass, double radius, vec3 color, double rotSpeed, float orbitalVel);
     void setSimulation();
+    void drawTrail(const deque<vec3>& points, vec3 color);
     void drawStar(Star& st);
     void drawPlanet(Planet& pt);
     void step();
