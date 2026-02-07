@@ -9,7 +9,7 @@ layout (std140, binding=0) uniform WindowData {
 uniform mat4 model;
 
 out vec3 FragPos;
-out vec3 LocalPos; // Used to calculate distance from center
+out vec3 LocalPos;
 
 void main() {
     LocalPos = aPos; 
