@@ -71,6 +71,18 @@ struct Satellite {
     Satellite(vec3 pos, double m, double r, vec3 c, double rS, vec3 v);
 };
 
+struct Ring {
+    double distance;
+    double thickness;
+    double inclination;
+    vec3 color;
+    vector<GLfloat> vertices;
+    vector<GLuint> indices;
+    GLuint VAO, VBO, EBO;
+
+    Ring(double d, double t, double i, vec3 c);
+};
+
 struct Planet {
     vec3 position;
     double mass;
@@ -79,6 +91,7 @@ struct Planet {
     double rotationAngle;
     double rotationSpeed;
     vec3 initialVelocity;
+    vector<Ring> rings;
     vector<Satellite> satellites;
     vector<GLfloat> vertices;
     vector<GLuint> indices;
@@ -107,7 +120,7 @@ private:
     string getFileContents(const char* filename);
     GLuint createShader(const char* vertexFile, const char* fragmentFile);
 
-    GLuint uboWindowData, starShaderID, planetShaderID, satelliteShaderID;
+    GLuint uboWindowData, starShaderID, planetShaderID, ringShaderID, satelliteShaderID;
 
     vector<unique_ptr<Star>> stars;
     vector<unique_ptr<Planet>> planets;
@@ -140,6 +153,7 @@ public:
     void updateMatrices();
     Star* addStar(unique_ptr<Star> st);
     Planet* addPlanet(float distance, double mass, double radius, vec3 color, double rotSpeed, float orbVel, float incRad);
+    void addRing(Planet* parent, double distFromPlanet, double thickness, double inclination, vec3 color);
     Satellite* addSatellite(Planet* parent, float distFromPlanet, double mass, double radius, vec3 color, double rotSpeed, float orbitalVel);
     void setSimulation();
     void drawStar(Star& st);

@@ -88,6 +88,43 @@ Satellite::Satellite(vec3 pos, double m, double r, vec3 c, double rS, vec3 v)
     glEnableVertexAttribArray(0);
 }
 
+Ring::Ring(double d, double t, double i, vec3 c)
+    : distance(d), thickness(t), inclination(i), color(c) {
+    
+    int segments = 100;
+    float innerRadius = (float)distance;
+    float outerRadius = (float)distance + (float)thickness;
+
+    for (int i = 0; i <= segments; ++i) {
+        float theta = 2.0f * M_PI * i / segments;
+        float x = cos(theta);
+        float z = sin(theta);
+
+        vertices.push_back(x * innerRadius); vertices.push_back(0.0f); vertices.push_back(z * innerRadius);
+        vertices.push_back(x * outerRadius); vertices.push_back(0.0f); vertices.push_back(z * outerRadius);
+    }
+
+    for (int i = 0; i < segments * 2; i++) {
+        indices.push_back(i);
+        indices.push_back(i + 1);
+        indices.push_back(i + 2);
+    }
+
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+}
+
 Planet::Planet(vec3 pos, double m, double r, vec3 c, double rS, vec3 v) 
     : position(pos), mass(m), radius(r), color(c), rotationSpeed(rS), initialVelocity(v) {
     
@@ -178,6 +215,7 @@ Engine::Engine() {
 
     this->starShaderID = createShader("resources/shaders/star.vert", "resources/shaders/star.frag");
     this->planetShaderID = createShader("resources/shaders/planet.vert", "resources/shaders/planet.frag");
+    this->ringShaderID = createShader("resources/shaders/ring.vert", "resources/shaders/ring.frag");
     this->satelliteShaderID = createShader("resources/shaders/satellite.vert", "resources/shaders/satellite.frag");
 
     glEnable(GL_DEPTH_TEST);
@@ -298,6 +336,12 @@ Planet* Engine::addPlanet(float distance, double mass, double radius, vec3 color
     return planetPtr;
 }
 
+void Engine::addRing(Planet* parent, double distFromPlanet, double thickness, double inclination, vec3 color) {
+    if (!parent) return;
+
+    parent->rings.emplace_back(distFromPlanet, thickness, inclination, color);
+}
+
 Satellite* Engine::addSatellite(Planet* parent, float distFromPlanet, double mass, double radius, vec3 color, double rotSpeed, float orbitalVel) {
     if (!parent) return nullptr;
 
@@ -343,6 +387,7 @@ void Engine::drawStar(Star& st) {
 void Engine::drawPlanet(Planet& pt) {
     glUseProgram(this->planetShaderID);
     pt.rotationAngle += pt.rotationSpeed * (double)deltaTime;
+    
     mat4 model = mat4(1.0f);
     model = translate(model, pt.position);
     model = rotate(model, (float)pt.rotationAngle, vec3(0.0f, 1.0f, 0.0f));
@@ -354,6 +399,20 @@ void Engine::drawPlanet(Planet& pt) {
 
     glBindVertexArray(pt.VAO);
     glDrawElements(GL_TRIANGLES, (GLsizei)pt.indices.size(), GL_UNSIGNED_INT, 0);
+
+    glUseProgram(this->ringShaderID);
+    for (auto& ring : pt.rings) {
+        mat4 ringModel = mat4(1.0f);
+        ringModel = translate(ringModel, pt.position);
+        ringModel = rotate(ringModel, (float)ring.inclination, vec3(1.0f, 0.0f, 0.0f));
+        ringModel = scale(ringModel, vec3(scaleFactor));
+
+        glUniformMatrix4fv(glGetUniformLocation(planetShaderID, "model"), 1, GL_FALSE, value_ptr(ringModel));
+        glUniform3fv(glGetUniformLocation(planetShaderID, "planetColor"), 1, value_ptr(ring.color));
+
+        glBindVertexArray(ring.VAO);
+        glDrawElements(GL_TRIANGLE_STRIP, (GLsizei)ring.indices.size(), GL_UNSIGNED_INT, 0);
+    }
 
     glUseProgram(this->satelliteShaderID);
     for (auto& sat : pt.satellites) {
@@ -496,6 +555,12 @@ Engine::~Engine() {
         glDeleteVertexArrays(1, &planet->VAO);
         glDeleteBuffers(1, &planet->VBO);
         glDeleteBuffers(1, &planet->EBO);
+
+        for (auto& ring : planet->rings) {
+            glDeleteVertexArrays(1, &ring.VAO);
+            glDeleteBuffers(1, &ring.VBO);
+            glDeleteBuffers(1, &ring.EBO);
+        }
 
         for (auto& sat : planet->satellites) {
             glDeleteVertexArrays(1, &sat.VAO);

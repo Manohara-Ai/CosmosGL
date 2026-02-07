@@ -26,6 +26,7 @@ int main() {
 
     // Saturn
     Planet* Saturn = engine.addPlanet(1.433e12f, 5.68e26, 5.82e7, vec3(0.9f, 0.8f, 0.5f), 1.63e-4,   9680.0f, 0.0435f);
+    engine.addRing(Saturn, 7.0e7, 6.5e7, 0.45, vec3(0.8f, 0.7f, 0.5f));
 
     // Uranus
     Planet* Uranus = engine.addPlanet(2.871e12f, 8.68e25, 2.53e7, vec3(0.6f, 0.8f, 0.9f), -1.04e-4,  6800.0f, 0.0134f);
