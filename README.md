@@ -362,9 +362,11 @@ The engine features an interactive orbital camera and focus system:
 *Still from the simulation of our Solar System.*
 
 ![Sagittarius A*](resources/images/img3.png "Sagittarius A*")
+
 *Sagittarius A star located at center of Milky Way*
 
 ![Sagittarius A*](resources/images/img4.png "Sagittarius A*")
+
 *Gravitational Lensing*
 
 ---
