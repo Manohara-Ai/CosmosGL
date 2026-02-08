@@ -322,9 +322,8 @@ Relativistic Potential: In the Ray Engine, gravity isn't just a force; it's a sp
 
 
 #### 2. The Raytracing Pipeline (Gravitational Lensing)
-- Geodesic Solving: The Compute Shader traces rays from the camera. As a ray passes a mass, its direction is deflected according to General Relativity:
-   $$ \Delta \phi = \frac{4GM}{c^2b} $$
-   where $b$ is the impact parameter. This creates the iconic "Einstein Ring" and warped background stars.
+- Geodesic Solving: The ray is deflected by an angle  
+  $\Delta \phi = \frac{4GM}{c^2 b}$, where $b$ is the impact parameter.
 
 - Event Horizon: If a ray's path falls within the Schwarzschild radius ($R_s = \frac{2GM}{c^2}$), the shader terminates the ray and returns absolute black, simulating the point of no return.
 
